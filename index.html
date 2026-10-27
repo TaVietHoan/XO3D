@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEON ARENA - Cyberpunk 3D Gomoku Online</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+          colors: {
+            cyber: {
+              bg: '#050713',
+              card: 'rgba(15, 23, 42, 0.75)',
+              cyan: '#00F0FF',
+              magenta: '#FF007F',
+              violet: '#8A2BE2',
+              gold: '#FFD700',
+              success: '#00FF66',
+              danger: '#FF3344'
+            }
+          },
+          boxShadow: {
+            'neon-cyan': '0 0 20px rgba(0, 240, 255, 0.45)',
+            'neon-magenta': '0 0 20px rgba(255, 0, 127, 0.45)',
+            'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.5)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Three.js & Confetti CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .glass-panel {
+      background: rgba(13, 19, 43, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .btn-press:active {
+      transform: scale(0.96);
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.9; }
+    }
+    .animate-pulse-glow {
+      animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+    ::-webkit-scrollbar-thumb { background: rgba(0,240,255,0.3); border-radius: 4px; }
+  </style>
+</head>
+<body class="h-full w-full text-slate-100 overflow-hidden font-sans bg-cyber-bg">
+
+  <!-- 3D VIEWPORT CONTAINER -->
+  <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+  <!-- 2D FALLBACK BOARD (Hiện diện nếu WebGL không khả dụng) -->
+  <div id="fallback-2d-board" class="absolute inset-0 z-0 hidden flex-col items-center justify-center p-4 bg-slate-950">
+    <div class="text-xs text-amber-400 font-bold mb-2">⚡ CHẾ ĐỘ 2D DỰ PHÒNG (WebGL Offline)</div>
+    <div id="grid-2d" class="grid grid-cols-15 gap-0.5 bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-2xl max-w-[95vw] max-h-[75vh] aspect-square"></div>
+  </div>
+
+  <!-- APP OVERLAY UI -->
+  <div id="ui-layer" class="relative z-10 h-full w-full pointer-events-none flex flex-col justify-between p-4 md:p-6">
+
+    <!-- TOP HEADER -->
+    <header class="flex justify-between items-center w-full max-w-7xl mx-auto pointer-events-auto">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyber-cyan to-cyber-violet flex items-center justify-center shadow-neon-cyan">
+          <svg class="w-6 h-6 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl md:text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyber-cyan via-white to-cyber-magenta">NEON ARENA</h1>
+          <div class="flex items-center gap-2">
+            <span id="connection-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="connection-text" class="text-xs text-slate-400 uppercase tracking-widest font-semibold">Online</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex items-center gap-2">
+        <button id="btn-config-api" title="Cấu hình GAS URL" class="btn-press glass-panel p-2.5 rounded-xl hover:border-cyber-cyan transition text-slate-300 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </button>
+        <button id="btn-camera-reset" title="Đặt lại góc nhìn" class="btn-press glass-panel p-2.5 rounded-xl hover:border-cyber-cyan transition text-slate-300 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- IN-GAME HUD (Hiện khi đang trong ván) -->
+    <div id="game-hud" class="hidden w-full max-w-4xl mx-auto pointer-events-auto transition-all duration-300">
+      <div class="glass-panel p-3 md:p-4 rounded-2xl flex items-center justify-between gap-2 shadow-glass border-cyber-cyan/30">
+        <!-- Player 1 (NOVA - Cyan) -->
+        <div id="hud-player-x" class="flex items-center gap-3 transition-opacity">
+          <div class="relative">
+            <div class="w-12 h-12 rounded-xl bg-slate-800 border-2 border-cyber-cyan overflow-hidden flex items-center justify-center font-bold text-cyber-cyan text-lg shadow-neon-cyan">X</div>
+            <span id="turn-badge-x" class="hidden absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-cyber-cyan text-black font-extrabold text-[10px] rounded-full uppercase tracking-tighter">Lượt</span>
+          </div>
+          <div>
+            <div id="hud-p1-name" class="font-bold text-sm md:text-base text-white">Player X</div>
+            <div class="text-xs text-cyber-cyan font-mono flex items-center gap-1">
+              <span>● NOVA</span>
+              <span id="p1-score" class="text-slate-400">(0W)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center Match Timer / Status -->
+        <div class="flex flex-col items-center">
+          <div id="match-status-pill" class="px-3 py-1 bg-slate-900/80 rounded-full border border-slate-700 text-xs font-semibold text-slate-300 uppercase tracking-widest">
+            Vòng 1
+          </div>
+          <div id="turn-announcement" class="text-xs font-bold mt-1 text-cyber-cyan animate-pulse">Lượt của bạn</div>
+        </div>
+
+        <!-- Player 2 (LUNA - Magenta) -->
+        <div id="hud-player-o" class="flex items-center gap-3 flex-row-reverse transition-opacity">
+          <div class="relative">
+            <div class="w-12 h-12 rounded-xl bg-slate-800 border-2 border-cyber-magenta overflow-hidden flex items-center justify-center font-bold text-cyber-magenta text-lg shadow-neon-magenta">O</div>
+            <span id="turn-badge-o" class="hidden absolute -bottom-1 -left-1 px-1.5 py-0.5 bg-cyber-magenta text-white font-extrabold text-[10px] rounded-full uppercase tracking-tighter">Lượt</span>
+          </div>
+          <div class="text-right">
+            <div id="hud-p2-name" class="font-bold text-sm md:text-base text-white">Đang đợi...</div>
+            <div class="text-xs text-cyber-magenta font-mono flex items-center gap-1 justify-end">
+              <span id="p2-score" class="text-slate-400">(0W)</span>
+              <span>LUNA ●</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM CONTROLS & STICKERS -->
+    <footer class="w-full max-w-xl mx-auto flex flex-col items-center gap-3 pointer-events-auto">
+      <!-- In-Game Action Bar -->
+      <div id="ingame-actions" class="hidden flex items-center gap-3">
+        <button id="btn-toggle-stickers" class="btn-press glass-panel px-4 py-2 rounded-xl flex items-center gap-2 hover:border-cyber-cyan text-sm font-semibold text-slate-200">
+          <span>💬</span> Biểu cảm
+        </button>
+        <button id="btn-combat-taunt" class="btn-press glass-panel px-4 py-2 rounded-xl flex items-center gap-2 hover:border-cyber-magenta text-sm font-semibold text-slate-200">
+          <span>⚔️</span> Khiêu khích 3D
+        </button>
+        <button id="btn-surrender" class="btn-press glass-panel px-4 py-2 rounded-xl flex items-center gap-2 hover:border-red-500 text-sm font-semibold text-red-400">
+          <span>🏳️</span> Đầu hàng
+        </button>
+      </div>
+
+      <!-- Sticker Drawer (Tự ẩn sau khi chọn) -->
+      <div id="sticker-drawer" class="hidden glass-panel p-3 rounded-2xl grid grid-cols-6 gap-2 border border-slate-700/80 shadow-2xl">
+        <button data-sticker="👋" class="btn-press p-2 hover:bg-white/10 rounded-lg text-2xl transition">👋</button>
+        <button data-sticker="🔥" class="btn-press p-2 hover:bg-white/10 rounded-lg text-2xl transition">🔥</button>
+        <button data-sticker="😎" class="btn-press p-2 hover:bg-white/10 rounded-lg text-2xl transition">😎</button>
+        <button data-sticker="🤔" class="btn-press p-2 hover:bg-white/10 rounded-lg text-2xl transition">🤔</button>
+        <button data-sticker="😱" class="btn-press p-2 hover:bg-white/10 rounded-lg text-2xl transition">😱</button>
+        <button data-sticker="GG" class="btn-press p-2 hover:bg-white/10 rounded-lg text-base font-extrabold text-cyber-cyan transition">GG</button>
+      </div>
+
+      <!-- Live Emote Notification Popup Area -->
+      <div id="emote-popups" class="h-8 flex items-center justify-center"></div>
+    </footer>
+  </div>
+
+  <!-- MODAL 1: LOBBY & MAIN MENU -->
+  <div id="modal-lobby" class="fixed inset-0 z-20 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-md p-6 md:p-8 rounded-3xl border border-cyber-cyan/30 shadow-2xl flex flex-col gap-6">
+      <div class="text-center">
+        <div class="inline-block px-3 py-1 bg-cyber-cyan/10 border border-cyber-cyan/30 rounded-full text-cyber-cyan text-xs font-bold tracking-widest uppercase mb-2">Đấu Trường Không Gian</div>
+        <h2 class="text-3xl font-extrabold text-white">NEON ARENA</h2>
+        <p class="text-sm text-slate-400 mt-1">Cờ Caro Chiến Thuật 3D Trực Tuyến 1vs1</p>
+      </div>
+
+      <!-- Nickname Input -->
+      <div>
+        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Tên Chiến Binh</label>
+        <div class="relative">
+          <input id="input-nickname" type="text" maxlength="15" placeholder="Nhập biệt hiệu của bạn..." 
+                 class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan font-medium">
+          <div class="absolute right-3 top-3 text-slate-500 text-xs uppercase font-mono">15 ký tự</div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-col gap-3">
+        <button id="btn-quick-match" class="btn-press w-full py-3.5 bg-gradient-to-r from-cyber-cyan to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold rounded-xl shadow-neon-cyan flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          TÌM TRẬN NHANH (QUICK MATCH)
+        </button>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button id="btn-create-room" class="btn-press py-3 glass-panel hover:border-cyber-magenta hover:bg-cyber-magenta/10 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+            <span>➕</span> Tạo Phòng
+          </button>
+          <button id="btn-join-room-modal" class="btn-press py-3 glass-panel hover:border-cyber-violet hover:bg-cyber-violet/10 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+            <span>🔑</span> Nhập Mã
+          </button>
+        </div>
+      </div>
+
+      <!-- Character Preview Switcher info -->
+      <div class="text-center border-t border-slate-800 pt-4">
+        <span class="text-xs text-slate-500">Nhân vật 3D Procedural: <strong>NOVA</strong> (Quân X) & <strong>LUNA</strong> (Quân O)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: TÌM TRẬN / CHỜ ĐỐI THỦ -->
+  <div id="modal-matchmaking" class="fixed inset-0 z-30 hidden flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-lg">
+    <div class="glass-panel w-full max-w-sm p-6 rounded-3xl border border-cyber-cyan/40 shadow-neon-cyan text-center flex flex-col items-center gap-5">
+      <div class="relative w-20 h-20 flex items-center justify-center">
+        <div class="absolute inset-0 border-4 border-cyber-cyan/20 border-t-cyber-cyan rounded-full animate-spin"></div>
+        <div class="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-cyber-cyan font-extrabold text-xl">VS</div>
+      </div>
+      <div>
+        <h3 id="mm-title" class="text-xl font-extrabold text-white">Đang tìm đối thủ...</h3>
+        <p id="mm-room-code" class="text-xs font-mono text-cyber-cyan mt-1 hidden"></p>
+        <p class="text-xs text-slate-400 mt-1">Vui lòng giữ kết nối. Quá trình ghép sẽ hoàn thành trong giây lát.</p>
+      </div>
+      <div id="private-room-share" class="hidden w-full bg-slate-900/90 p-3 rounded-xl border border-slate-700">
+        <span class="text-xs text-slate-400 block mb-1">Mã phòng của bạn:</span>
+        <div class="flex items-center justify-between">
+          <span id="display-room-code" class="font-mono text-lg font-bold text-cyber-cyan tracking-wider">------</span>
+          <button id="btn-copy-code" class="px-2 py-1 bg-cyber-cyan/20 text-cyber-cyan text-xs font-bold rounded hover:bg-cyber-cyan/40">Sao chép</button>
+        </div>
+      </div>
+      <button id="btn-cancel-match" class="btn-press w-full py-2.5 glass-panel hover:bg-red-500/20 hover:border-red-500 text-red-400 font-bold rounded-xl text-sm">
+        Hủy Tìm Trận
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 3: NHẬP MÃ PHÒNG -->
+  <div id="modal-join-input" class="fixed inset-0 z-30 hidden flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-lg">
+    <div class="glass-panel w-full max-w-sm p-6 rounded-3xl border border-cyber-violet/50 shadow-2xl flex flex-col gap-4">
+      <h3 class="text-lg font-bold text-white text-center">Vào Phòng Riêng</h3>
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Nhập mã gồm 6 ký tự:</label>
+        <input id="input-room-code" type="text" maxlength="6" placeholder="VD: 8X2K9P" class="w-full text-center uppercase tracking-widest font-mono text-xl py-3 bg-slate-900 border border-slate-700 rounded-xl text-cyber-cyan focus:outline-none focus:border-cyber-cyan">
+      </div>
+      <div class="grid grid-cols-2 gap-3 mt-2">
+        <button id="btn-cancel-join" class="btn-press py-2.5 glass-panel text-slate-400 font-bold rounded-xl text-sm">Quay Lại</button>
+        <button id="btn-confirm-join" class="btn-press py-2.5 bg-cyber-violet hover:bg-violet-600 text-white font-bold rounded-xl text-sm">Tham Gia</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: KẾT THÚC TRẬN ĐẤU (VICTORY / DEFEAT) -->
+  <div id="modal-game-over" class="fixed inset-0 z-40 hidden flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
+    <div class="glass-panel w-full max-w-md p-8 rounded-3xl border text-center flex flex-col items-center gap-5 shadow-2xl">
+      <div id="game-over-icon" class="text-6xl animate-bounce">🏆</div>
+      <div>
+        <h2 id="game-over-title" class="text-3xl font-extrabold uppercase tracking-wider">CHIẾN THẮNG!</h2>
+        <p id="game-over-desc" class="text-sm text-slate-300 mt-2">Bạn đã hoàn thành 5 quân liên tiếp và làm chủ đấu trường.</p>
+      </div>
+      <div class="w-full grid grid-cols-2 gap-3 mt-2">
+        <button id="btn-rematch" class="btn-press py-3 bg-gradient-to-r from-cyber-cyan to-blue-600 font-bold text-black rounded-xl">Đấu Lại</button>
+        <button id="btn-leave-room" class="btn-press py-3 glass-panel font-bold text-slate-300 rounded-xl">Về Sảnh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: CẤU HÌNH API BACKEND GOOGLE APPS SCRIPT -->
+  <div id="modal-config" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
+    <div class="glass-panel w-full max-w-lg p-6 rounded-3xl border border-slate-700 shadow-2xl flex flex-col gap-4">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        <span>⚙️</span> Cấu hình Google Apps Script Web App
+      </h3>
+      <p class="text-xs text-slate-400">
+        Dán URL Web App triển khai từ Google Apps Script của bạn vào đây. Dữ liệu sẽ được lưu an toàn tại trình duyệt cục bộ (localStorage).
+      </p>
+      <input id="input-api-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" 
+             class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono text-cyber-cyan focus:outline-none focus:border-cyber-cyan">
+      <div class="flex justify-end gap-3 mt-2">
+        <button id="btn-close-config" class="btn-press px-4 py-2 glass-panel text-slate-300 text-sm font-bold rounded-xl">Đóng</button>
+        <button id="btn-save-config" class="btn-press px-5 py-2 bg-cyber-cyan text-black text-sm font-bold rounded-xl">Lưu Cấu Hình</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- SCRIPT LOGIC TOÀN CỤC -->
+  <script src="app.js"></script>
+</body>
+</html>
